@@ -1,0 +1,195 @@
+<?php
+/**
+ * Implementation of hook_form_FORM_ID_alter
+ */
+
+/**
+ * Kebutuhan untuk drupal send mail
+ */
+use Drupal\Core\Mail\MailManagerInterface;
+use Drupal\Component\Utility\SafeMarkup;
+use Drupal\Component\Utility\Html;
+
+/**
+ * Implementation of hook_form_FORM_ID_alter
+ */
+
+function pinjamzoom_form_node_pinjam_zoom_edit_form_alter(&$form, \Drupal\Core\Form\FormStateInterface $form_state, $form_id) {
+  // untuk debug dump variabel
+  //dpm(get_defined_vars());
+  
+  // hide di frontend dengan menambahkan class d-none
+  $form['title']['#attributes']['class'][] = 'd-none';
+  $form['field_bagian_peminjam']['#attributes']['class'][] = 'd-none';
+  $form['field_email_peminjam']['#attributes']['class'][] = 'd-none';
+  $form['field_jumlah_peserta_meeting']['#attributes']['class'][] = 'd-none';
+  $form['field_nama_peminjam']['#attributes']['class'][] = 'd-none';
+  $form['field_waktu_mulai_meeting']['#attributes']['class'][] = 'd-none';
+  $form['field_waktu_selesai_meeting']['#attributes']['class'][] = 'd-none';
+  
+  // reset nilai field_kirim_email selalu ke false
+  $form['field_kirim_email']['widget']['value']['#default_value'] = 0;
+  
+  // tambahkan ke action ketika submit untuk memanggil fungsi pinjamzoom_submit
+  $form['actions']['submit']['#submit'][] = 'pinjamzoom_submit';
+  // apabila ingin fungsinya dijalankan sebelum semua urutan submit bisa dengan array_unshift
+  //array_unshift($form['actions']['submit']['#submit'], 'pinjamzoom_submit');
+}
+
+/**
+ * Implementation of submitForm
+ */
+
+function pinjamzoom_submit(&$form, \Drupal\Core\Form\FormStateInterface $form_state) {
+  // untuk debug menggunakan fungsi mail php standar
+  //mail($form['field_email_peminjam']['widget'][0]['value']['#default_value'], 'duer', 'tes' . $form['field_status']['widget']['#value']);
+  
+  $status = $form['field_status']['widget']['#value'];
+  $kirimemailflag = $form['field_kirim_email']['widget']['value']['#value'];
+  // jika flag kirim email dicentang dan statusnya confirm atau batal, maka lanjut kirim email
+  if($kirimemailflag && ($status == 'Confirm' || $status == 'Batal')) {
+    $namauser = $form['field_nama_peminjam']['widget'][0]['value']['#value'];
+    $bagianuser = $form['field_bagian_peminjam']['widget'][0]['value']['#value'];
+    $emailuser = $form['field_email_peminjam']['widget'][0]['value']['#value'];
+    $topikmeeting = $form['title']['widget'][0]['value']['#value'];
+    $jumlahpeserta = $form['field_jumlah_peserta_meeting']['widget']['#value'];
+    $waktumulai = $form['field_waktu_mulai_meeting']['widget'][0]['value']['#value']['date'] . ' - ' . $form['field_waktu_mulai_meeting']['widget'][0]['value']['#value']['time'];
+    $waktuselesai = $form['field_waktu_selesai_meeting']['widget'][0]['value']['#value']['date'] . ' - ' . $form['field_waktu_selesai_meeting']['widget'][0]['value']['#value']['time'];
+    $akunzoom = $form['field_akun_zoom']['widget']['#value'];
+    $akunzoomstring = strtolower($form['field_akun_zoom']['widget'][$akunzoom]['#title'] . '@konimex.com');
+    $mailManager = \Drupal::service('plugin.manager.mail');
+    $module = 'pinjamzoom';
+    $key = 'pinjamzoom_update';
+    $to = $namauser . '<' . $emailuser . '>';
+    $replyto = 'PA MIS <pa.mis@konimex.com>';
+    $langcode = \Drupal::currentUser()->getPreferredLangcode();
+    /**
+     * Load node password berdasarkan nid nya, dan berdasarkan opsi yang dipilih oleh user:
+     * 1 => zoom7 => nid nya 205
+     * 2 => zoom8 => nid nya 206
+     * 3 => zoom9 => nid nya 207
+     * 4 => zoom11 => nid nya 208
+     * 5 => zoom12 => nid nya 209
+     */
+    if($akunzoom == 1) {
+      $node = \Drupal::entityTypeManager()->getStorage('node')->load(205);
+    } elseif($akunzoom == 2) {
+      $node = \Drupal::entityTypeManager()->getStorage('node')->load(206);
+    } elseif($akunzoom == 3) {
+      $node = \Drupal::entityTypeManager()->getStorage('node')->load(207);
+    } elseif($akunzoom == 4) {
+      $node = \Drupal::entityTypeManager()->getStorage('node')->load(208);
+    } elseif($akunzoom == 5) {
+      $node = \Drupal::entityTypeManager()->getStorage('node')->load(209);
+    } else {
+      $message = t('There was a problem sending the email, please contact CDM. Error line 74');
+      drupal_set_message($message, 'error');
+    }
+    $passwordzoomarray = $node->get('field_password_akun_zoom')->getValue();
+    $passwordzoom = $passwordzoomarray[0]['value'];
+    $params['title'] = 'Re: [Zoom] - Pinjam Zoom ' . $topikmeeting;
+    if($status == 'Confirm') {
+      // tidak perlu diindent, disini wysiwyg
+      $params['message'] = 'Dh,
+
+Berikut informasi akun Zoomnya:
+
+username : ' . $akunzoomstring . '
+
+password : ' . $passwordzoom . '                                         
+
+Terima kasih
+
+Email ini otomatis terkirim dari program ketika konfirmasi
+
+> Permintaan Konfirmasi Peminjaman Zoom
+> 
+> Informasi di bawah ini telah menginput di web Pinjam Zoom:
+>
+> Nama
+> ' . $namauser . '
+>
+> Bagian
+> ' . $bagianuser .'
+>
+> Email
+> ' . $emailuser .'
+>
+> Topik Meeting
+> ' . $topikmeeting .'
+>
+> Jumlah Peserta
+> ' . $jumlahpeserta .'
+>
+> Waktu Mulai
+> ' . $waktumulai .'
+>
+> Waktu Selesai
+> ' . $waktuselesai .'
+>
+> Mohon dapat menunggu konfirmasi dari admin Pinjam Zoom.';
+    } elseif($status == 'Batal') {
+      $params['message'] = 'Dh,
+
+Permintaan akun Zoom di bawah ini telah dibatalkan
+
+Terima kasih
+
+Email ini otomatis terkirim dari program ketika konfirmasi
+
+> Permintaan Konfirmasi Peminjaman Zoom
+> 
+> Informasi di bawah ini telah menginput di web Pinjam Zoom:
+>
+> Nama
+> ' . $namauser . '
+>
+> Bagian
+> ' . $bagianuser .'
+>
+> Email
+> ' . $emailuser .'
+>
+> Topik Meeting
+> ' . $topikmeeting .'
+>
+> Jumlah Peserta
+> ' . $jumlahpeserta .'
+>
+> Waktu Mulai
+> ' . $waktumulai .'
+>
+> Waktu Selesai
+> ' . $waktuselesai .'
+>
+> Mohon dapat menunggu konfirmasi dari admin Pinjam Zoom.';
+    }
+    $send = true;
+    $result = $mailManager->mail($module, $key, $to, $langcode, $params, $replyto, $send);
+    if ($result['result'] != true) {
+      $message = t('There was a problem sending the email, please contact CDM. Error line 169');
+      drupal_set_message($message, 'error');
+      return;
+    }
+    $message = t('Email sent to @email ', array('@email' => $to));
+    drupal_set_message($message);
+  }
+}
+
+/**
+ * Implements hook_mail().
+ */
+function pinjamzoom_mail($key, &$message, $params) {
+  $options = array(
+    'langcode' => $message['langcode'],
+  );
+  switch($key) {
+    case 'pinjamzoom_update':
+      $message['headers']['From'] = 'Pinjam Zoom <noreply@konimex.com>';
+      $message['headers']['Cc'] = 'PA MIS <pa.mis@konimex.com>, NSO <nso@intra.net>';
+      $message['subject'] = t('@title', array('@title' => $params['title']), $options);
+      $message['body'][] = Html::escape($params['message']);
+      break;
+  }
+}
+

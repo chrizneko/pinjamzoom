@@ -1,0 +1,5 @@
+name: Pinjam Zoom Module
+type: module
+core: '8.x'
+description: 'Module untuk menambah fungsi web pinjamzoom'
+version: 1.0
